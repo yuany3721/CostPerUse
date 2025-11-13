@@ -1,17 +1,59 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
+import { RouterLink, RouterView } from 'vue-router';
+import Loading from './components/Loading.vue';
+import { useCounterStore } from './stores/counter';
+import { useAuthStore } from './stores/auth';
+import { authService } from './Auth';
+import { ref } from 'vue'
+import Cookies from 'js-cookie';
+
+import axios from 'axios';
+axios.defaults.withCredentials = true;
+
+const authStore = useAuthStore();
+const counterStore = useCounterStore();
+
+const authorized = ref(false);
+
+onMounted(async () => {
+  const queryString = window.location.search.split('?')[1];
+  if (queryString && queryString.includes('token=')) {
+    const token = queryString.split('token=')[1]?.split('&')[0] ?? null;
+    Cookies.set('token', token || "", { expires: 7 });
+    // console.log('从URL获取token:', token);
+    window.location.href = window.location.href.split('?')[0] ?? window.location.href;
+  }
+
+  if (authStore.token) {
+    // console.log('已有token:', authStore.token);
+    authorized.value = await authService.validateAuth();
+  } else {
+    // console.log('无token');
+    authorized.value = false;
+  }
+
+  if (!authorized.value) {
+   try {
+    await authService.startLogin(window.location.href);
+  } catch (error) {
+    console.error('login err:', error);
+  } 
+  } 
+});
+
+
 </script>
 
 <template>
   <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+    <!-- <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" /> -->
 
     <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+      
+      <Loading msg="Waiting for authentication ..." v-if="!authorized" />
 
       <nav>
-        <RouterLink to="/">Home</RouterLink>
+        <RouterLink to="/">Home{{ counterStore.count }}</RouterLink>
         <RouterLink to="/about">About</RouterLink>
       </nav>
     </div>
