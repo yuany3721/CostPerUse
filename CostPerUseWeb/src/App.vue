@@ -1,127 +1,86 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router';
-import Loading from './components/Loading.vue';
-import { useCounterStore } from './stores/counter';
-import { useAuthStore } from './stores/auth';
-import { authService } from './Auth';
+// import { RouterView } from 'vue-router'
+import AuthLoading from './components/AuthLoading.vue'
+import { useAuthStore } from './stores/auth'
 import { ref } from 'vue'
-import Cookies from 'js-cookie';
+import Cookies from 'js-cookie'
 
-import axios from 'axios';
-axios.defaults.withCredentials = true;
+import { authService } from './Auth'
+const authStore = useAuthStore()
 
-const authStore = useAuthStore();
-const counterStore = useCounterStore();
+import axios from 'axios'
+axios.defaults.withCredentials = true
 
-const authorized = ref(false);
+const authorized = ref(false)
 
 onMounted(async () => {
-  const queryString = window.location.search.split('?')[1];
-  if (queryString && queryString.includes('token=')) {
-    const token = queryString.split('token=')[1]?.split('&')[0] ?? null;
-    Cookies.set('token', token || "", { expires: 7 });
-    // console.log('从URL获取token:', token);
-    window.location.href = window.location.href.split('?')[0] ?? window.location.href;
-  }
+    const queryString = window.location.search.split('?')[1]
+    if (queryString && queryString.includes('token=')) {
+        const token = queryString.split('token=')[1]?.split('&')[0] ?? null
+        Cookies.set('token', token || '', { expires: 7 })
+        // console.log('从URL获取token:', token);
+        window.location.href = window.location.href.split('?')[0] ?? window.location.href
+    }
 
-  if (authStore.token) {
-    // console.log('已有token:', authStore.token);
-    authorized.value = await authService.validateAuth();
-  } else {
-    // console.log('无token');
-    authorized.value = false;
-  }
+    if (authStore.token) {
+        // console.log('已有token:', authStore.token);
+        await setTimeout(() => {
+            // authStore.setToken(authStore.token);
+        }, 1000)
+        authorized.value = await authService.validateAuth()
+    } else {
+        // console.log('无token');
+        authorized.value = false
+    }
 
-  if (!authorized.value) {
-   try {
-    await authService.startLogin(window.location.href);
-  } catch (error) {
-    console.error('login err:', error);
-  } 
-  } 
-});
-
-
+    if (!authorized.value) {
+        try {
+            await authService.startLogin(window.location.href)
+        } catch (error) {
+            console.error('login err:', error)
+        }
+    }
+})
+const activeIndex = ref('/cost')
+const handleSelect = (key: string, keyPath: string[]) => {
+    console.log(key, keyPath)
+}
 </script>
 
 <template>
-  <header>
-    <!-- <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" /> -->
+    <el-container class="container" :style="{ boxShadow: `var(--el-box-shadow)`,}">
+        <AuthLoading v-if="!authorized" />
 
-    <div class="wrapper">
-      
-      <Loading msg="Waiting for authentication ..." v-if="!authorized" />
+        <el-aside width="100px" v-if="authorized">
+            <el-menu :default-active="activeIndex"  @select="handleSelect" :router="true">
+                <!-- <el-menu-item index="/">Home</el-menu-item> -->
+                <el-menu-item index="/cost">cost</el-menu-item>
+                <el-menu-item index="/about">about</el-menu-item>
+            </el-menu>
+        </el-aside>
 
-      <nav>
-        <RouterLink to="/">Home{{ counterStore.count }}</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
-    </div>
-  </header>
-
-  <RouterView />
+        <el-main v-if="authorized">
+            <router-view />
+        </el-main>
+    
+    </el-container>
 </template>
 
 <style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
+.container{
+    height: 100vh;
+    width: 100vw;
 }
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
+.el-header {
+    position: relative;
 }
 
-nav {
-  width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
+.el-aside {
+    border-right: 1px solid #eee;
 }
 
-nav a.router-link-exact-active {
-  color: var(--color-text);
-}
-
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
-}
-
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-}
-
-nav a:first-of-type {
-  border: 0;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
+.el-menu {
+    border-right: none;
 }
 </style>

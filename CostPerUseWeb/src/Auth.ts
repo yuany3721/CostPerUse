@@ -22,16 +22,16 @@ class AuthService {
 
             const data = await response.json();
 
-            console.log('认证验证响应数据:', data);
+            // console.log('认证验证响应数据:', data);
 
             if (data.payload) {
                 this.getStore().userInfo = data.payload;
             }
-            console.log('当前用户信息:', this.getStore().userInfo);
+            // console.log('当前用户信息:', this.getStore().userInfo);
 
             return data.valid;
         } catch (error) {
-            console.error('验证认证状态失败:', error);
+            console.error('validateAuth failed:', error);
             return false;
         }
     }
@@ -41,12 +41,12 @@ class AuthService {
             const response = await fetch(`${this.apiBase}/auth/login?redirect_url=${encodeURIComponent(redirect_url)}`);
             const data = await response.json();
 
-            console.log('获取登录URL响应数据:', data);
+            // console.log('获取登录URL响应数据:', data);
 
             // 重定向到OAuth登录页面
             window.location.href = data.login_url;
         } catch (error) {
-            console.error('获取登录URL失败:', error);
+            // console.error('获取登录URL失败:', error);
             throw error;
         }
     }
