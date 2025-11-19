@@ -5,6 +5,8 @@ import { useAuthStore } from './stores/auth'
 import { ref } from 'vue'
 import Cookies from 'js-cookie'
 
+import { useDefaultStore } from './stores/default'
+
 import { authService } from './Auth'
 const authStore = useAuthStore()
 
@@ -27,7 +29,14 @@ onMounted(async () => {
         await setTimeout(() => {
             // authStore.setToken(authStore.token);
         }, 1000)
-        authorized.value = await authService.validateAuth()
+        const valid = await authService.validateAuth()
+        if (valid && authStore.userInfo.groups.includes('Home')) {
+            // console.log('token有效');
+            authorized.value = true
+        } else {
+            // console.log('token无效');
+            authorized.value = false
+        }
     } else {
         // console.log('无token');
         authorized.value = false
@@ -41,33 +50,32 @@ onMounted(async () => {
         }
     }
 })
-const activeIndex = ref('/cost')
+const activeIndex = ref(useDefaultStore().defaultRoute)
 const handleSelect = (key: string, keyPath: string[]) => {
     console.log(key, keyPath)
 }
 </script>
 
 <template>
-    <el-container class="container" :style="{ boxShadow: `var(--el-box-shadow)`,}">
+    <el-container class="container" :style="{ boxShadow: `var(--el-box-shadow)` }">
         <AuthLoading v-if="!authorized" />
 
         <el-aside width="100px" v-if="authorized">
-            <el-menu :default-active="activeIndex"  @select="handleSelect" :router="true">
+            <el-menu :default-active="activeIndex" @select="handleSelect" :router="true">
                 <!-- <el-menu-item index="/">Home</el-menu-item> -->
+                <el-menu-item index="/note">note</el-menu-item>
                 <el-menu-item index="/cost">cost</el-menu-item>
-                <el-menu-item index="/about">about</el-menu-item>
             </el-menu>
         </el-aside>
 
         <el-main v-if="authorized">
             <router-view />
         </el-main>
-    
     </el-container>
 </template>
 
 <style scoped>
-.container{
+.container {
     height: 100vh;
     width: 100vw;
 }

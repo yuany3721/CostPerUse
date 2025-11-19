@@ -27,7 +27,7 @@ class AuthService {
             if (data.payload) {
                 this.getStore().userInfo = data.payload;
             }
-            // console.log('当前用户信息:', this.getStore().userInfo);
+            // console.log('当前用户信息:', this.getStore().userInfo.groups, this.getStore().userInfo.groups.includes('Home'));
 
             return data.valid;
         } catch (error) {
