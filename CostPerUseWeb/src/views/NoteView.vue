@@ -4,29 +4,52 @@ import type { TableInstance } from 'element-plus'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { marked } from 'marked'
+import axios from 'axios'
+import type { TableColumnCtx } from 'element-plus'
 
 const tableLayout = ref<TableInstance['tableLayout']>('fixed')
 
-type TableData = {
+interface TableRow  {
     id: number
-    date: string
     tags: string[]
     content: string
+    created_at: string
+    updated_at: string
 }
 
-const tableData = ref()
+interface ListItem {
+    value: string
+    label: string
+}
+
+interface NoteDialogConfig {
+    visible: boolean
+    content: string
+    created_at: string
+    id: number
+    tags: string[]
+    tagOptions: ListItem[]
+    loading: boolean
+}
+
+
+const tableData = ref<TableRow[]>([])
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalNotes = ref(0)
-const noteDialogConfig = reactive({
+const noteDialogConfig = reactive<NoteDialogConfig>({
     visible: false,
     content: '',
-    date: '',
+    created_at: '',
     id: -1,
+    tags: [],
+    tagOptions: [],
     loading: false,
-    width: '5em',
 })
-const tagList = ref<ListItem[]>([])
+const tableTagList = ref<ListItem[]>([])
+const allTagList = ref<ListItem[]>([])
+const apiBase = import.meta.env.VITE_API_BASE
+
 
 function getTableDataByPage(
     pageNum: number,
@@ -34,56 +57,45 @@ function getTableDataByPage(
     noteFilter: string = '',
     tagFilter: Array<string> = [],
 ): void {
-    const data: TableData[] = []
-    const startIndex = (pageNum - 1) * pageSize
-    const endIndex = pageNum * pageSize
     console.log('fetching data', pageNum, pageSize, noteFilter, tagFilter)
-    const getdata: TableData[] = [
-        {
-            id: 1,
-            date: '2016-05-03',
-            tags: ['Tom', 'Jerry'],
-            content:
-                'No. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 18. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 189, Grove St, No. 189, Grove St, Los Angeles',
-        },
-        {
-            id: 2,
-            date: '2016-05-02 00:22:11',
-            tags: ['Tom'],
-            content: '<b>teet</b>\n# 1weaw \n## waeawe\nwaeaweaw561aw',
-        },
-        {
-            id: 3,
-            date: '2016-05-02 00:22:11',
-            tags: ['Jerry'],
-            content: '<b>teet</b>\n# 1weaw \n## waeawe\nwaeaweaw561aw',
-        },
-    ]
-    data.push(...getdata)
-    tableData.value = data
+    axios.post(`${apiBase}/note/getByPage`, {
+        "page": pageNum,
+        "pageSize": pageSize,
+        "noteFilter": noteFilter,
+        "tagFilter": tagFilter,
+    }).then((res) => {
+        console.log("getByPage", res)
+        tableData.value = res.data
+    }).catch((error) => {
+        console.error("getByPage error", error)
+    })
 }
 
 function getTotalSize(noteFilter: string = '', tagFilter: Array<string> = []) {
     // 请求note总数
-    totalNotes.value = 400
+        axios.post(`${apiBase}/note/getTotal`, {
+            "noteFilter": noteFilter,
+            "tagFilter": tagFilter
+        }).then((res) => {
+            totalNotes.value = res.data
+        })
     console.log('fetching total size', noteFilter, tagFilter)
 }
 
 function getTagList(noteFilter: string = '', tagFilter: Array<string> = []) {
     // 请求所有Tag列表
-    if (tagFilter.length > 0) {
-        tagList.value = tagFilter.map((tag) => ({
+    axios.post(`${apiBase}/note/getAllTags`, {
+        "noteFilter": noteFilter,
+        "tagFilter": tagFilter
+    }).then((res) => {
+        tableTagList.value = res.data.map((tag: string) => ({
             value: tag.toLowerCase(),
             label: tag.toLowerCase(),
         }))
-    } else {
-        // tagFilter为空，请求所有tag
-        console.log('Fetching all tags', noteFilter, tagFilter)
-    }
-    tagList.value = [
-        { value: 'tom', label: 'tom' },
-        { value: 'jerry', label: 'jerry' },
-    ]
+        if (!noteFilter && !tagFilter.length && !allTagList.value.length) {
+            allTagList.value = tableTagList.value
+        }
+    })
 }
 
 onMounted(() => {
@@ -98,46 +110,74 @@ const tagSearch = ref([])
 const tagOptions = ref<ListItem[]>()
 const loading = ref(false)
 
-interface ListItem {
-    value: string
-    label: string
+const handleClose = (done: () => void) => {
+  ElMessageBox.confirm('Close without saving?')
+    .then(() => {
+      done()
+    })
+    .catch(() => {
+      // catch error
+    })
 }
 
-const handleNoteSearch = (note: string) => {
+const handleNoteSearchChange = (note: string) => {
     // 请求后端搜索note
     console.log('Search note:', note)
+    getTableDataByPage(currentPage.value, pageSize.value, note, tagSearch.value)
+    getTotalSize(note, tagSearch.value)
+    getTagList(note, tagSearch.value)
 }
 
-const handleTagSelect = (query: string) => {
+const handleTagFilterSelect = (query: string) => {
+    console.log(query, tagOptions, tableTagList)
     // 本地页面搜索tag方法
     if (query) {
         loading.value = true
         setTimeout(() => {
             loading.value = false
-            tagOptions.value = tagList.value.filter((item) => {
+            tagOptions.value = tableTagList.value.filter((item) => {
                 return item.label.toLowerCase().includes(query.toLowerCase())
             })
         }, 200)
     } else {
-        tagOptions.value = tagList.value
+        tagOptions.value = tableTagList.value
     }
 }
 
-const handleTagChange = (value: string[]) => {
+
+const handleNewNoteTagSearch = (query: string) => {
+    // new note dialog本地搜索tag方法
+    if (query) {
+        noteDialogConfig.loading = true
+        noteDialogConfig.loading = false
+        noteDialogConfig.tagOptions = allTagList.value.filter((item) => {
+            return item.label.toLowerCase().includes(query.toLowerCase())
+        })
+    } else {
+        noteDialogConfig.tagOptions = allTagList.value
+    }
+}
+
+const handleTagSearchChange = (value: string[]) => {
     // 请求后端搜索tag
     console.log('Selected tags:', value)
+    getTableDataByPage(currentPage.value, pageSize.value, noteSearch.value, value)
+    getTotalSize(noteSearch.value, value)
+    getTagList(noteSearch.value, value)
 }
 
 const handlePageChange = (val: number) => {
-    getTableDataByPage(val, pageSize.value)
+    getTableDataByPage(val, pageSize.value, noteSearch.value, tagSearch.value)
 }
 
-const handleRowClick = (row: any, column: any, event: Event): void => {
+// eslint-disable-next-line 
+const handleRowClick = (row: TableRow, column: TableColumnCtx<TableRow>, event: Event): void => {
     // 点击行事件，弹出note详情对话框
-    console.log(row.id, row.content, row.tags, row.date)
+    console.log(row.id, row.content, row.tags, row.created_at)
     noteDialogConfig.visible = true
     noteDialogConfig.content = row.content
-    noteDialogConfig.date = row.date
+    noteDialogConfig.tags = row.tags
+    noteDialogConfig.created_at = row.created_at
     noteDialogConfig.id = row.id
 }
 
@@ -145,9 +185,11 @@ const mdPreviewShow = ref(true)
 const mdTextEdit = ref<HTMLTextAreaElement | null>(null)
 const handlemdTextEditBlur = () => {
     // textarea失去焦点时切换到markdown浏览模式
+    if (noteDialogConfig.content === '') return
     mdPreviewShow.value = true
 }
 
+// eslint-disable-next-line 
 const handleMdClick = (event: MouseEvent) => {
     // 点击markdown预览区域时切换到编辑模式
     if (noteDialogConfig.loading) return
@@ -159,12 +201,13 @@ const handleMdClick = (event: MouseEvent) => {
 
 const handleNewNoteClick = () => {
     // 新建note按钮点击事件，弹出note详情对话框
-    noteDialogConfig.visible = true
-    noteDialogConfig.content = ''
-    noteDialogConfig.date = new Date().toString()
-    // mdPreviewShow.value = true
-    mdPreviewShow.value = false
     noteDialogConfig.id = -1
+    noteDialogConfig.content = ''
+    noteDialogConfig.created_at = new Date().toLocaleString()
+    noteDialogConfig.tags = []
+    noteDialogConfig.visible = true
+    mdPreviewShow.value = false
+    // console.log(noteDialogConfig)
 }
 
 const handleNoteChange = () => {
@@ -173,7 +216,7 @@ const handleNoteChange = () => {
     console.log(
         'Note changed:',
         noteDialogConfig.content,
-        noteDialogConfig.date,
+        noteDialogConfig.created_at,
         noteDialogConfig.id,
     )
     if (noteDialogConfig.content.length === 0) {
@@ -182,10 +225,58 @@ const handleNoteChange = () => {
         noteDialogConfig.loading = false
         return
     }
-    setTimeout(() => {
-        noteDialogConfig.visible = false
-        noteDialogConfig.loading = false
-    }, 1000)
+    if (noteDialogConfig.id === -1) {
+        axios.post(`${apiBase}/note/newNote`, {
+            "content": noteDialogConfig.content,
+            "tags": noteDialogConfig.tags,
+            "created_at": noteDialogConfig.created_at,
+        }).then((response) => {
+            console.log('newNote', response.data)
+            tableData.value.push({
+                id: response.data,
+                content: noteDialogConfig.content,
+                created_at: noteDialogConfig.created_at,
+                updated_at: noteDialogConfig.created_at,
+                tags: noteDialogConfig.tags,
+            })
+            noteDialogConfig.visible = false
+            noteDialogConfig.loading = false
+        }).catch((error) => {
+            console.log(error)
+            noteDialogConfig.visible = false
+            noteDialogConfig.loading = false
+        }).finally(() => {
+            noteDialogConfig.visible = false
+            noteDialogConfig.loading = false
+        })
+    }
+    else {
+        axios.post(`${apiBase}/note/updateNote`, {
+            "id": noteDialogConfig.id,
+            "content": noteDialogConfig.content,
+            "tags": noteDialogConfig.tags,
+            "created_at": noteDialogConfig.created_at,
+        }).then((response) => {
+            console.log('updateNote', response.data)
+            const index = tableData.value.findIndex(row => row.id === noteDialogConfig.id)
+            if (index !== -1) {
+                Object.assign(tableData.value[index]!, {
+                    content: noteDialogConfig.content,
+                    created_at: noteDialogConfig.created_at,
+                    tags: noteDialogConfig.tags
+                })
+            }
+            noteDialogConfig.visible = false
+            noteDialogConfig.loading = false
+        }).catch((error) => {
+            console.log(error)
+            noteDialogConfig.visible = false
+            noteDialogConfig.loading = false
+        }).finally(() => {
+            noteDialogConfig.visible = false
+            noteDialogConfig.loading = false
+        })
+    }
 }
 
 const hanldeNoteDelete = () => {
@@ -202,7 +293,18 @@ const hanldeNoteDelete = () => {
         type: 'warning',
     })
         .then(() => {
-            console.log('Note deleted:', noteDialogConfig.content, noteDialogConfig.date)
+            axios.post(`${apiBase}/note/deleteNote`, {
+                id: noteDialogConfig.id
+            }).then((res) => {
+                console.log('res', res)
+                if (res.data) {
+                    const index = tableData.value.findIndex(row => row.id === noteDialogConfig.id)
+                    if (index !== -1) {
+                        tableData.value.splice(index, 1)
+                    }
+                }
+            })
+            console.log('Note deleted:', noteDialogConfig.content, noteDialogConfig.created_at)
             noteDialogConfig.loading = false
             noteDialogConfig.visible = false
             ElMessage({
@@ -234,7 +336,7 @@ const hanldeNoteDelete = () => {
                             placeholder="Search note"
                             clearable
                             size="small"
-                            @change="handleNoteSearch"
+                            @change="handleNoteSearchChange"
                         />
                     </template>
                     <template #default="scope">
@@ -255,11 +357,11 @@ const hanldeNoteDelete = () => {
                             remote
                             clearable
                             placeholder="Search tags"
-                            :remote-method="handleTagSelect"
+                            :remote-method="handleTagFilterSelect"
                             :loading="loading"
                             size="small"
                             style="max-width: 180px"
-                            @change="handleTagChange"
+                            @change="handleTagSearchChange"
                         >
                             <el-option
                                 v-for="item in tagOptions"
@@ -281,13 +383,13 @@ const hanldeNoteDelete = () => {
                         </el-tag>
                     </template>
                 </el-table-column>
-                <el-table-column prop="date" label="Date" width="150" />
+                <el-table-column prop="created_at" label="Date" width="150"/>
             </el-table>
 
-            <el-dialog v-model="noteDialogConfig.visible" title="Note">
+            <el-dialog v-model="noteDialogConfig.visible" :title="noteDialogConfig.id === -1? 'New Note':'Note'" :before-close="handleClose">
                 <div v-loading="noteDialogConfig.loading"></div>
                 <el-form :model="noteDialogConfig">
-                    <el-form-item label="Content" :label-width="noteDialogConfig.width">
+                    <el-form-item label="Content" label-width="5em">
                         <el-input
                             ref="mdTextEdit"
                             v-model="noteDialogConfig.content"
@@ -305,9 +407,29 @@ const hanldeNoteDelete = () => {
                             min-height="1em"
                         />
                     </el-form-item>
-                    <el-form-item label="Time" :label-width="noteDialogConfig.width">
+                    <el-form-item label="Tags" label-width="5em">
+                        <el-select
+                            v-model="noteDialogConfig.tags"
+                            multiple
+                            filterable
+                            remote
+                            clearable
+                            allow-create
+                            placeholder="Search tags"
+                            :remote-method="handleNewNoteTagSearch"
+                            :disabled="noteDialogConfig.loading"
+                        >
+                            <el-option
+                                v-for="item in noteDialogConfig.tagOptions"
+                                :key="item.value"
+                                :value="item.value"
+                                :label="item.label"
+                            />
+                        </el-select>
+                        </el-form-item>
+                    <el-form-item label="Time" label-width="5em">
                         <el-date-picker
-                            v-model="noteDialogConfig.date"
+                            v-model="noteDialogConfig.created_at"
                             type="datetime"
                             placeholder="DateTime"
                             format="YYYY/MM/DD hh:mm:ss"
@@ -319,7 +441,7 @@ const hanldeNoteDelete = () => {
                 <template #footer>
                     <div class="dialog-footer">
                         <el-button @click="noteDialogConfig.visible = false">Cancel</el-button>
-                        <el-button type="danger" @click="hanldeNoteDelete">Delete</el-button>
+                        <el-button type="danger" @click="hanldeNoteDelete" v-show="noteDialogConfig.id > 0">Delete</el-button>
                         <el-button type="primary" @click="handleNoteChange"> Confirm </el-button>
                     </div>
                 </template>
